@@ -22,10 +22,13 @@ class runModel:
     def __init__(self, mainDir):
         self.mainDir = mainDir
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.max_norm = 1
+        self.sequence_length = 128
 
     def run(self):
         # load in classes
         dataProcessor = DataProcessor(self.mainDir)
+        hyperparams = hyperParams()
         pp5vals = pp5()
 
         # get eda, temp, glucose, and hr data of all the samples
@@ -34,7 +37,6 @@ class runModel:
         edaData = dataProcessor.loadData(samples, "eda")
         tempData = dataProcessor.loadData(samples, "temp")
         hrData = dataProcessor.loadData(samples, "hr")
-
         # 
         X, y = createPersSamples(glucoseData, edaData, hrData, tempData, pp5vals, 12, 1000, samples)
 
@@ -42,10 +44,9 @@ class runModel:
 
         train_data = [[X_train[i], y_train[i]] for i in range(len(X_train))]
         test_data = [[X_test[i], y_test[i]] for i in range(len(X_test))]
-        train_dataloader = self.createBatches(train_data)
-        test_dataloader = self.createBatches(test_data)
+        train_dataloader = self.createBatches(train_data, batch_size = 16)
+        test_dataloader = self.createBatches(test_data, batch_size = 16)
 
-        hyperparams = hyperParams()
         model = Transformer(
             num_tokens=hyperparams.NUM_TOKENS,
             embedding_dim_encode=hyperparams.EMBEDDING_DIM_ENCODE,
@@ -57,8 +58,9 @@ class runModel:
             norm_first=hyperparams.NORM_FIRST,
             device = self.device
         ).to(self.device)
-        opt = optim.Adam(model.parameters(), lr=hyperparams.LEARNING_RATE, eps=1e-8)
-        criterion = nn.MSELoss()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=self.max_norm)
+        opt = optim.SGD(model.parameters(), lr=hyperparams.LEARNING_RATE, momentum = 0.9, weight_decay=1e-5)
+        criterion = nn.CrossEntropyLoss()
         criterion = criterion.to(self.device)
         CHECKPOINT_FOLDER = "./saved_model"
 
@@ -93,12 +95,11 @@ class runModel:
             y_expected = y[1:]
 
             # Get mask to mask out the next words
-            sequence_length = len(y_input)
-            tgt_mask = model.get_tgt_mask(sequence_length).to(self.device)
+            tgt_mask = model.get_tgt_mask(self.sequence_length).to(self.device)
             pred = model(X, y_input, tgt_mask)
 
             # Permute pred to have batch size first again
-            pred = pred.permute(1, 2, 0)
+            pred = pred.permute(1, 2, 0).float()
             # argmax gives the prediction
             y_pred = torch.argmax(pred.detach(), axis=1).float()
             y_pred.requires_grad = True
@@ -142,12 +143,11 @@ class runModel:
                 y_expected = y[1:]
 
                 # Get mask to mask out the next words
-                sequence_length = len(y_input)
-                tgt_mask = model.get_tgt_mask(sequence_length).to(self.device)
+                tgt_mask = model.get_tgt_mask(self.sequence_length).to(self.device)
                 pred = model(X, y_input, tgt_mask)
 
                 # Permute pred to have batch size first again
-                pred = pred.permute(1, 2, 0)
+                pred = pred.permute(1, 2, 0).float()
                 # argmax gives the prediction
                 y_pred = torch.argmax(pred.detach(), axis=1).float()
                 y_pred.requires_grad = True
@@ -159,7 +159,7 @@ class runModel:
                 loss = criterion(y_pred, y_expected)
                 
                 total_loss += loss.detach().item()
-    
+
         epoch_loss = total_loss / len(dataloader)
         epoch_acc = np.mean(accuracy)
 

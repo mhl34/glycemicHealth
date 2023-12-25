@@ -66,6 +66,33 @@ class Transformer(nn.Module):
             self.transformerDecoderLayer, 
             num_layers=self.num_decoder_layers
         )
+        self.transformerEDA = nn.Transformer(
+            d_model=self.embedding_dim_encode,
+            nhead=self.num_heads,
+            num_encoder_layers=self.num_encoder_layers,
+            num_decoder_layers=self.num_decoder_layers,
+            dropout=self.dropout_p,
+            norm_first=self.norm_first,
+            batch_first=True
+        )
+        self.transformerHR = nn.Transformer(
+            d_model=self.embedding_dim_encode,
+            nhead=self.num_heads,
+            num_encoder_layers=self.num_encoder_layers,
+            num_decoder_layers=self.num_decoder_layers,
+            dropout=self.dropout_p,
+            norm_first=self.norm_first,
+            batch_first=True
+        )
+        self.transformerTEMP = nn.Transformer(
+            d_model=self.embedding_dim_encode,
+            nhead=self.num_heads,
+            num_encoder_layers=self.num_encoder_layers,
+            num_decoder_layers=self.num_decoder_layers,
+            dropout=self.dropout_p,
+            norm_first=self.norm_first,
+            batch_first=True
+        )
         self.transformer = nn.Transformer(
             d_model=self.embedding_dim_encode,
             nhead=self.num_heads,
@@ -79,6 +106,8 @@ class Transformer(nn.Module):
         self.fc1 = nn.Linear(self.embedding_dim_decode, self.num_tokens*4)
         self.fc2 = nn.Linear(self.num_tokens*4, self.num_tokens*2)
         self.fc3 = nn.Linear(self.num_tokens*2, self.num_tokens)
+
+        self.sequence_length = 15
 
     # function: forward of model
     # input: src, tgt, tgt_mask
@@ -103,10 +132,12 @@ class Transformer(nn.Module):
         hr = hr.permute(1,0,2)
         temp = temp.permute(1,0,2)
         tgt = tgt.permute(1,0,2)
+
+        mask = self.get_tgt_mask(15)
         
-        edaTransformerOut = self.transformer(eda, tgt, tgt_mask=tgt_mask)
-        hrTransformerOut = self.transformer(hr, tgt, tgt_mask=tgt_mask)
-        tempTransformerOut = self.transformer(temp, tgt, tgt_mask=tgt_mask)
+        edaTransformerOut = self.transformer(eda, tgt, tgt_mask=mask)
+        hrTransformerOut = self.transformer(hr, tgt, tgt_mask=mask)
+        tempTransformerOut = self.transformer(temp, tgt, tgt_mask=mask)
         
         out = F.relu(self.fc1(torch.cat((edaTransformerOut, hrTransformerOut, tempTransformerOut), 2)))
         out = F.relu(self.fc2(out))
