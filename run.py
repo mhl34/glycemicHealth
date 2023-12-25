@@ -58,11 +58,11 @@ class runModel:
             device = self.device
         ).to(self.device)
         opt = optim.Adam(model.parameters(), lr=hyperparams.LEARNING_RATE, eps=1e-8)
-        loss_fn = nn.MSELoss()
-        loss_fn = loss_fn.to(self.device)
+        criterion = nn.MSELoss()
+        criterion = criterion.to(self.device)
         CHECKPOINT_FOLDER = "./saved_model"
 
-        train_loss_list, validation_loss_list = self.fit(model, opt, loss_fn, train_dataloader, test_dataloader, 20)
+        train_loss_list, validation_loss_list = self.fit(model, opt, criterion, train_dataloader, test_dataloader, 20)
 
     def createBatches(self, data, batch_size=16, padding=False, padding_token=-1):
         batches = []
@@ -73,7 +73,7 @@ class runModel:
         print(f"{len(batches)} batches of size {batch_size}")
         return batches
 
-    def train(self, model, opt, loss_fn, dataloader):
+    def train(self, model, opt, criterion, dataloader):
         model.train()
         total_loss = 0
 
@@ -100,13 +100,15 @@ class runModel:
             # Permute pred to have batch size first again
             pred = pred.permute(1, 2, 0)
             # argmax gives the prediction
-            y_pred = torch.argmax(pred.detach(), axis=1)
-            # print(y_pred, y_expected)
+            y_pred = torch.argmax(pred.detach(), axis=1).float()
+            y_pred.requires_grad = True
+            y_expected = y_expected.float()
+            y_expected.requires_grad = True
             # print(torch.argmax(pred.detach(), axis=1))
             mape = self.mean_absolute_percentage_error(y_expected, y_pred)
             accuracy.append(100 - mape.detach().item())
             # accuracy.append(comp_accuracy(y_pred, y_expected).item())
-            loss = loss_fn(pred, y_expected)
+            loss = criterion(y_pred, y_expected)
 
             opt.zero_grad()
             loss.backward()
@@ -119,7 +121,7 @@ class runModel:
         return epoch_loss, epoch_acc
 
 
-    def evaluate(self, model, loss_fn, dataloader):
+    def evaluate(self, model, criterion, dataloader):
         model.eval()
         total_loss = 0
 
@@ -147,11 +149,14 @@ class runModel:
                 # Permute pred to have batch size first again
                 pred = pred.permute(1, 2, 0)
                 # argmax gives the prediction
-                y_pred = torch.argmax(pred.detach(), axis=1)
+                y_pred = torch.argmax(pred.detach(), axis=1).float()
+                y_pred.requires_grad = True
+                y_expected = y_expected.float()
+                y_expected.requires_grad = True
                 mape = self.mean_absolute_percentage_error(y_expected, y_pred)
                 accuracy.append(100 - mape.cpu().detach().item())
                 # accuracy.append(comp_accuracy(y_pred, y_expected).item())
-                loss = loss_fn(pred, y_expected)
+                loss = criterion(y_pred, y_expected)
                 
                 total_loss += loss.detach().item()
     
@@ -160,13 +165,13 @@ class runModel:
 
         return epoch_loss, epoch_acc
 
-    def fit(self, model, opt, loss_fn, train_dataloader, test_dataloader, epochs):
+    def fit(self, model, opt, criterion, train_dataloader, test_dataloader, epochs):
         best_test_acc = float('-inf')
         print("Training and validating model")
         for epoch in range(epochs):
             print(f"Epoch: {epoch + 1}")
 
-            train_loss, train_accuracy = self.train(model, opt, loss_fn, train_dataloader)
+            train_loss, train_accuracy = self.train(model, opt, criterion, train_dataloader)
             print(f"Training loss: {train_loss:.4f}")
             print(f"Training accuracy: {train_accuracy:.4f}")
             # print(f"Validation loss: {validation_loss:.4f}")
@@ -181,7 +186,7 @@ class runModel:
                         'lr': 0.001}
                 torch.save(state['state_dict'], os.path.join(CHECKPOINT_FOLDER, 'ermTransformerPersGluc.pth'))
 
-            test_loss, test_accuracy = self.evaluate(model, loss_fn, test_dataloader)
+            test_loss, test_accuracy = self.evaluate(model, criterion, test_dataloader)
             print(f"Test loss: {test_loss:.4f}")
             print(f"Test accuracy: {test_accuracy:.4f}")
 
