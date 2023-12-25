@@ -44,8 +44,8 @@ class runModel:
         test_dataloader = self.createBatches(test_data)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        hyperparams = HyperParamsPersGluc()
-        model = TransformerPersGluc(
+        hyperparams = hyperParams()
+        model = Transformer(
             num_tokens=hyperparams.NUM_TOKENS,
             embedding_dim_encode=hyperparams.EMBEDDING_DIM_ENCODE,
             embedding_dim_decode=hyperparams.EMBEDDING_DIM_DECODE,
@@ -57,7 +57,7 @@ class runModel:
             device = device
         ).to(device)
         opt = optim.Adam(model.parameters(), lr=hyperparams.LEARNING_RATE, eps=1e-8)
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.MSELoss()
         loss_fn = loss_fn.to(device)
         CHECKPOINT_FOLDER = "./saved_model"
 
@@ -196,4 +196,4 @@ class runModel:
 if __name__ == "__main__":
     mainDir = "/home/mhl34/big-ideas-lab-glycemic-variability-and-wearable-device-data-1.1.0/"
     obj = runModel(mainDir)
-    runModel
+    obj.run()
