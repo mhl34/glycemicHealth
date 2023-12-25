@@ -17,6 +17,7 @@ from DataProcessor import DataProcessor
 from pp5 import pp5
 from Transformer import Transformer
 from utils import createPersSamples
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 class runModel:
     def __init__(self, mainDir):
@@ -59,12 +60,14 @@ class runModel:
             device = self.device
         ).to(self.device)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=self.max_norm)
-        opt = optim.SGD(model.parameters(), lr=hyperparams.LEARNING_RATE, momentum = 0.9, weight_decay=1e-5)
-        criterion = nn.CrossEntropyLoss()
+        # opt = optim.SGD(model.parameters(), lr=hyperparams.LEARNING_RATE, momentum = 0.9, weight_decay=1e-5)
+        opt = optim.Adam(model.parameters(), lr=hyperparams.LEARNING_RATE)
+        scheduler = CosineAnnealingLR(opt, T_max=hyperparams.ANNEALING_STEP_SIZE, eta_min=hyperparams.LEARNING_RATE * (hyperparams.ANNEALING_DECAY**4))
+        criterion = nn.MSELoss()
         criterion = criterion.to(self.device)
         CHECKPOINT_FOLDER = "./saved_model"
 
-        train_loss_list, validation_loss_list = self.fit(model, opt, criterion, train_dataloader, test_dataloader, 20)
+        train_loss_list, validation_loss_list = self.fit(model, scheduler, criterion, train_dataloader, test_dataloader, 20)
 
     def createBatches(self, data, batch_size=16, padding=False, padding_token=-1):
         batches = []
@@ -111,7 +114,7 @@ class runModel:
             # accuracy.append(comp_accuracy(y_pred, y_expected).item())
             loss = criterion(y_pred, y_expected)
 
-            opt.zero_grad()
+            # opt.zero_grad()
             loss.backward()
             opt.step()
 
