@@ -150,6 +150,6 @@ class Transformer(nn.Module):
     # output: mask
     def get_tgt_mask(self, size) -> torch.tensor:
         mask = torch.tril(torch.ones(size,size) * float('-inf')).T
-        for i in range(size):
-            mask[i, i] = 0
+        # for i in range(size):
+        #     mask[i, i] = 0
         return mask
